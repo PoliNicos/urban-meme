@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 class VideoEncoder {
@@ -10,13 +9,10 @@ class VideoEncoder {
     required String resolution,
     int fps = 2,
   }) async {
-    if (framePaths.isEmpty) return false;
-
     try {
-      // Découpage propre de la résolution en entiers
       final parts = resolution.split('x');
-      final int width = int.parse(parts[0]);
-      final int height = int.parse(parts[1]);
+      final width = int.parse(parts[0]);
+      final height = int.parse(parts[1]);
 
       final bool result = await _channel.invokeMethod('createVideo', {
         'framePaths': framePaths,
@@ -25,13 +21,9 @@ class VideoEncoder {
         'height': height,
         'fps': fps,
       });
-
       return result;
-    } on PlatformException catch (e) {
-      debugPrint('Erreur Platform: ${e.message}');
-      return false;
     } catch (e) {
-      debugPrint('Erreur: $e');
+      print("Erreur encodage: $e");
       return false;
     }
   }

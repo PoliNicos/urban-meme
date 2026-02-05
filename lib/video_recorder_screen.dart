@@ -94,29 +94,28 @@ class _VideoRecorderScreenState extends State<VideoRecorderScreen> {
     if (_capturedFrames.isEmpty) return;
 
     try {
-      final String outputPath = '/storage/emulated/0/DCIM/video_${DateTime.now().millisecondsSinceEpoch}.mp4';
+      // UTILISE LE DOSSIER TEMPORAIRE (GARANTI SANS ERREUR DE PERMISSION)
+      final Directory tempDir = await getTemporaryDirectory();
+      final String outputPath = '${tempDir.path}/video_meme.mp4';
       
       final encoder = VideoEncoder();
-      final success = await encoder.createVideoFromFrames(
+      // Le résultat n'est plus un bool mais un String (OK ou l'Erreur)
+      final dynamic result = await encoder.createVideoFromFrames(
         framePaths: _capturedFrames,
         outputPath: outputPath,
         resolution: _selectedResolution,
         fps: 2,
       );
 
-      // Nettoyage des frames temporaires
-      for (var framePath in _capturedFrames) {
-        try { await File(framePath).delete(); } catch (_) {}
-      }
-      _capturedFrames.clear();
-      
-      if (success) {
-        _showMessage('Vidéo sauvegardée dans DCIM !');
+      if (result == "OK") {
+        _showMessage("SUCCÈS ! Vidéo créée dans le cache.");
+        // ICI : On ajoute le partage pour que tu puisses la sortir du téléphone
+        await Share.shareXFiles([XFile(outputPath)], text: 'Ma Vidéo 2FPS');
       } else {
-        _showMessage('Erreur : Consultez le fichier _log.txt dans DCIM');
+        _showMessage("ERREUR NATIF : $result");
       }
     } catch (e) {
-      _showMessage('Erreur: $e');
+      _showMessage("ERREUR FLUTTER : $e");
     }
   }
 

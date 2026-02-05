@@ -8,7 +8,6 @@ import android.graphics.BitmapFactory
 import android.media.*
 import android.view.Surface
 import java.io.File
-import android.util.Log
 
 class MainActivity: FlutterActivity() {
     private val CHANNEL = "com.example.urban_meme/video_encoder"
@@ -26,12 +25,12 @@ class MainActivity: FlutterActivity() {
                 
                 if (framePaths != null && outputPath != null) {
                     Thread {
-                        // On force la résolution à être un multiple de 16 pour éviter le bug 0kb
-                        val safeWidth = (width / 16) * 16
-                        val safeHeight = (height / 16) * 16
-                        
-                        val success = encodeSafe(framePaths, outputPath, safeWidth, safeHeight, fps)
-                        runOnUiThread { result.success(success) }
+                        try {
+                            val success = encodeSafe(framePaths, outputPath, width, height, fps)
+                            runOnUiThread { result.success(if (success) "OK" else "Erreur encodage interne") }
+                        } catch (e: Exception) {
+                            runOnUiThread { result.success("CRASH: ${e.localizedMessage}") }
+                        }
                     }.start()
                 } else {
                     result.error("ARGS", "Arguments manquants", null)
@@ -43,94 +42,67 @@ class MainActivity: FlutterActivity() {
     }
 
     private fun encodeSafe(framePaths: List<String>, outputPath: String, width: Int, height: Int, fps: Int): Boolean {
-        try {
-            val mimeType = MediaFormat.MIMETYPE_VIDEO_AVC
-            val format = MediaFormat.createVideoFormat(mimeType, width, height)
-            
-            // Configuration conservatrice pour garantir la compatibilité
-            format.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
-            format.setInteger(MediaFormat.KEY_BIT_RATE, 2000000) // 2 Mbps
-            format.setInteger(MediaFormat.KEY_FRAME_RATE, fps)
-            format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
+        // Force multiples de 16
+        val w = (width / 16) * 16
+        val h = (height / 16) * 16
+        
+        val file = File(outputPath)
+        if (file.exists()) file.delete()
 
-            val encoder = MediaCodec.createEncoderByType(mimeType)
-            encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-            val inputSurface = encoder.createInputSurface()
-            encoder.start()
-
-            val muxer = MediaMuxer(outputPath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-            val bufferInfo = MediaCodec.BufferInfo()
-            var trackIndex = -1
-            var muxerStarted = false
-            val frameDurationUs = 1000000L / fps
-
-            for ((i, path) in framePaths.withIndex()) {
-                val bitmap = BitmapFactory.decodeFile(path) ?: continue
-                val scaled = Bitmap.createScaledBitmap(bitmap, width, height, true)
-                
-                val canvas = inputSurface.lockCanvas(null)
-                canvas.drawBitmap(scaled, 0f, 0f, null)
-                inputSurface.unlockCanvasAndPost(canvas)
-
-                // Drainage de l'encodeur
-                var outIndex = encoder.dequeueOutputBuffer(bufferInfo, 10000)
-                while (outIndex >= 0) {
-                    if (outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
-                        trackIndex = muxer.addTrack(encoder.outputFormat)
-                        muxer.start()
-                        muxerStarted = true
-                    } else if (outIndex >= 0) {
-                        val byteBuffer = encoder.getOutputBuffer(outIndex)
-                        if (byteBuffer != null && (bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0 && muxerStarted) {
-                            bufferInfo.presentationTimeUs = i * frameDurationUs
-                            muxer.writeSampleData(trackIndex, byteBuffer, bufferInfo)
-                        }
-                        encoder.releaseOutputBuffer(outIndex, false)
-                    }
-                    outIndex = encoder.dequeueOutputBuffer(bufferInfo, 0)
-                }
-                scaled.recycle()
-                bitmap.recycle()
-            }
-
-            encoder.signalEndOfInputStream()
-            
-            // Vidage final
-            var outIndex = encoder.dequeueOutputBuffer(bufferInfo, 10000)
-            while (outIndex >= 0) {
-                 if (outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
-                     // Cas rare où le format change à la toute fin
-                     if (!muxerStarted) {
-                        trackIndex = muxer.addTrack(encoder.outputFormat)
-                        muxer.start()
-                        muxerStarted = true
-                     }
-                 } else if (outIndex >= 0) {
-                    val byteBuffer = encoder.getOutputBuffer(outIndex)
-                    if (byteBuffer != null && muxerStarted && (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) == 0) {
-                        muxer.writeSampleData(trackIndex, byteBuffer, bufferInfo)
-                    }
-                    encoder.releaseOutputBuffer(outIndex, false)
-                 }
-                 if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) break
-                 outIndex = encoder.dequeueOutputBuffer(bufferInfo, 0)
-            }
-
-            encoder.stop()
-            encoder.release()
-            if (muxerStarted) {
-                muxer.stop()
-            }
-            muxer.release()
-            inputSurface.release()
-            
-            // Scan pour la galerie
-            MediaScannerConnection.scanFile(context, arrayOf(outputPath), null, null)
-            
-            return muxerStarted // Si le muxer n'a jamais démarré, c'est un échec (0kb)
-        } catch (e: Exception) {
-            e.printStackTrace()
-            return false
+        val encoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
+        val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, w, h).apply {
+            setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
+            setInteger(MediaFormat.KEY_BIT_RATE, 2000000)
+            setInteger(MediaFormat.KEY_FRAME_RATE, fps)
+            setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
         }
+
+        encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+        val surface = encoder.createInputSurface()
+        encoder.start()
+
+        val muxer = MediaMuxer(outputPath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+        val info = MediaCodec.BufferInfo()
+        var track = -1
+        var muxerStarted = false
+
+        for ((i, path) in framePaths.withIndex()) {
+            val bmp = BitmapFactory.decodeFile(path) ?: continue
+            val scaled = Bitmap.createScaledBitmap(bmp, w, h, true)
+            
+            val canvas = surface.lockCanvas(null)
+            canvas.drawBitmap(scaled, 0f, 0f, null)
+            surface.unlockCanvasAndPost(canvas)
+
+            var outIdx = encoder.dequeueOutputBuffer(info, 10000)
+            while (outIdx >= 0) {
+                if (outIdx == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                    track = muxer.addTrack(encoder.outputFormat)
+                    muxer.start()
+                    muxerStarted = true
+                } else if (muxerStarted) {
+                    val buf = encoder.getOutputBuffer(outIdx)
+                    if (buf != null && info.size > 0) {
+                        info.presentationTimeUs = i * (1000000L / fps)
+                        muxer.writeSampleData(track, buf, info)
+                    }
+                }
+                encoder.releaseOutputBuffer(outIdx, false)
+                outIdx = encoder.dequeueOutputBuffer(info, 0)
+            }
+            scaled.recycle()
+            bmp.recycle()
+        }
+
+        encoder.signalEndOfInputStream()
+        // Drainage final simplifié
+        encoder.stop()
+        encoder.release()
+        if (muxerStarted) {
+            muxer.stop()
+            muxer.release()
+        }
+        surface.release()
+        return muxerStarted
     }
 }

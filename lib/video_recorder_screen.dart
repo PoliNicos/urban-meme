@@ -5,6 +5,7 @@ import 'package:camera/camera.dart';
 import 'package:path_provider/path_provider.dart';
 import 'main.dart';
 import 'video_encoder.dart';
+import 'package:share_plus/share_plus.dart';
 
 class VideoRecorderScreen extends StatefulWidget {
   const VideoRecorderScreen({super.key});

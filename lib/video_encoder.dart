@@ -13,9 +13,10 @@ class VideoEncoder {
     if (framePaths.isEmpty) return false;
 
     try {
+      // Découpage propre de la résolution en entiers
       final parts = resolution.split('x');
-      final width = int.parse(parts[0]);
-      final height = int.parse(parts[1]);
+      final int width = int.parse(parts[0]);
+      final int height = int.parse(parts[1]);
 
       final bool result = await _channel.invokeMethod('createVideo', {
         'framePaths': framePaths,
@@ -27,10 +28,10 @@ class VideoEncoder {
 
       return result;
     } on PlatformException catch (e) {
-      debugPrint('Errore Platform: ${e.message}');
+      debugPrint('Erreur Platform: ${e.message}');
       return false;
     } catch (e) {
-      debugPrint('Errore: $e');
+      debugPrint('Erreur: $e');
       return false;
     }
   }

@@ -31,10 +31,7 @@ class _VideoRecorderScreenState extends State<VideoRecorderScreen> {
   }
 
   Future<void> _initializeCamera() async {
-    if (cameras.isEmpty) {
-      debugPrint('Nessuna camera disponibile');
-      return;
-    }
+    if (cameras.isEmpty) return;
 
     _controller = CameraController(
       cameras[0],
@@ -77,8 +74,6 @@ class _VideoRecorderScreenState extends State<VideoRecorderScreen> {
       
       _capturedFrames.add(framePath);
       setState(() => _frameCount++);
-      
-      debugPrint('Frame $_frameCount catturato');
     } catch (e) {
       debugPrint('Errore cattura: $e');
     }
@@ -86,22 +81,17 @@ class _VideoRecorderScreenState extends State<VideoRecorderScreen> {
 
   Future<void> _stopRecording() async {
     _captureTimer?.cancel();
-    
     setState(() {
       _isRecording = false;
       _isProcessing = true;
     });
 
     await _createVideo();
-    
     setState(() => _isProcessing = false);
   }
 
   Future<void> _createVideo() async {
-    if (_capturedFrames.isEmpty) {
-      _showMessage('Nessun frame catturato');
-      return;
-    }
+    if (_capturedFrames.isEmpty) return;
 
     try {
       final String outputPath = '/storage/emulated/0/DCIM/video_${DateTime.now().millisecondsSinceEpoch}.mp4';
@@ -114,67 +104,43 @@ class _VideoRecorderScreenState extends State<VideoRecorderScreen> {
         fps: 2,
       );
 
+      // Nettoyage des frames temporaires
       for (var framePath in _capturedFrames) {
-        try {
-          await File(framePath).delete();
-        } catch (e) {
-          debugPrint('Errore eliminazione: $e');
-        }
+        try { await File(framePath).delete(); } catch (_) {}
       }
-      
       _capturedFrames.clear();
       
       if (success) {
-        _showMessage('Video salvato: $outputPath');
+        _showMessage('Vidéo sauvegardée dans DCIM !');
       } else {
-        _showMessage('Errore creazione video');
+        _showMessage('Erreur : Consultez le fichier _log.txt dans DCIM');
       }
     } catch (e) {
-      debugPrint('Errore: $e');
-      _showMessage('Errore: $e');
+      _showMessage('Erreur: $e');
     }
   }
 
   void _showMessage(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), duration: const Duration(seconds: 3)),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _showResolutionMenu() {
     showModalBottomSheet(
       context: context,
-      builder: (BuildContext context) {
-        return Container(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Seleziona Risoluzione', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
-              ..._resolutions.map((resolution) {
-                return ListTile(
-                  title: Text(resolution),
-                  leading: Radio<String>(
-                    value: resolution,
-                    groupValue: _selectedResolution,
-                    onChanged: (String? value) {
-                      setState(() => _selectedResolution = value!);
-                      Navigator.pop(context);
-                    },
-                  ),
-                  onTap: () {
-                    setState(() => _selectedResolution = resolution);
-                    Navigator.pop(context);
-                  },
-                );
-              }),
-            ],
-          ),
-        );
-      },
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: _resolutions.map((res) => ListTile(
+            title: Text(res),
+            onTap: () {
+              setState(() => _selectedResolution = res);
+              Navigator.pop(context);
+            },
+          )).toList(),
+        ),
+      ),
     );
   }
 
@@ -193,53 +159,31 @@ class _VideoRecorderScreenState extends State<VideoRecorderScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Registratore 2FPS'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        title: const Text('Urban Meme 2FPS'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: _isRecording ? null : _showResolutionMenu,
-            tooltip: 'Risoluzione',
-          ),
+          IconButton(icon: const Icon(Icons.settings), onPressed: _isRecording ? null : _showResolutionMenu),
         ],
       ),
       body: Column(
         children: [
-          Expanded(
-            child: Center(
-              child: AspectRatio(
-                aspectRatio: _controller!.value.aspectRatio,
-                child: CameraPreview(_controller!),
-              ),
-            ),
-          ),
+          Expanded(child: Center(child: CameraPreview(_controller!))),
           Container(
-            padding: const EdgeInsets.all(16),
-            color: Colors.black87,
+            padding: const EdgeInsets.all(20),
+            color: Colors.black,
             child: Column(
               children: [
-                Text('Risoluzione: $_selectedResolution', style: const TextStyle(color: Colors.white, fontSize: 16)),
-                const SizedBox(height: 8),
-                if (_isRecording)
-                  Text('Frame: $_frameCount (2 fps)', style: const TextStyle(color: Colors.green, fontSize: 18, fontWeight: FontWeight.bold)),
-                if (_isProcessing)
-                  const Column(
-                    children: [
-                      SizedBox(height: 8),
-                      CircularProgressIndicator(color: Colors.white),
-                      SizedBox(height: 8),
-                      Text('Creazione video...', style: TextStyle(color: Colors.white)),
-                    ],
-                  ),
+                Text('Risoluzione: $_selectedResolution', style: const TextStyle(color: Colors.white)),
+                if (_isRecording) Text('Frames: $_frameCount', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                if (_isProcessing) const LinearProgressIndicator(),
               ],
             ),
-          ),
+          )
         ],
       ),
-      floatingActionButton: _isProcessing ? null : FloatingActionButton.large(
+      floatingActionButton: _isProcessing ? null : FloatingActionButton(
         onPressed: _isRecording ? _stopRecording : _startRecording,
         backgroundColor: _isRecording ? Colors.red : Colors.green,
-        child: Icon(_isRecording ? Icons.stop : Icons.fiber_manual_record, size: 40),
+        child: Icon(_isRecording ? Icons.stop : Icons.videocam),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );

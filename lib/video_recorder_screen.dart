@@ -104,9 +104,7 @@ class _VideoRecorderScreenState extends State<VideoRecorderScreen> {
     }
 
     try {
-      final Directory appDir = await getApplicationDocumentsDirectory();
-      final String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-      final String outputPath = '${appDir.path}/video_$timestamp.mp4';
+      final String outputPath = '/storage/emulated/0/DCIM/video_${DateTime.now().millisecondsSinceEpoch}.mp4';
       
       final encoder = VideoEncoder();
       final success = await encoder.createVideoFromFrames(

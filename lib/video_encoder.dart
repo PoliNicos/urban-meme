@@ -1,9 +1,8 @@
-import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
+import 'package:ffmpeg_kit_flutter_min_gpl/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_min_gpl/return_code.dart';
+import 'dart:io';
 
 class VideoEncoder {
-  static const MethodChannel _channel = MethodChannel('com.example.urban_meme/video_encoder');
-
   Future<bool> createVideoFromFrames({
     required List<String> framePaths,
     required String outputPath,
@@ -12,27 +11,16 @@ class VideoEncoder {
   }) async {
     if (framePaths.isEmpty) return false;
 
-    try {
-      // Découpage propre de la résolution en entiers
-      final parts = resolution.split('x');
-      final int width = int.parse(parts[0]);
-      final int height = int.parse(parts[1]);
+    // Récupère le dossier où sont tes frames
+    final String folderPath = File(framePaths.first).parent.path;
+    
+    // Commande FFmpeg : On cherche les fichiers frame_00000.jpg, frame_00001.jpg...
+    // scale=${resolution.replaceAll('x', ':')} transforme '1280x720' en '1280:720'
+    final String command = "-y -framerate $fps -i $folderPath/frame_%05d.jpg -vf scale=${resolution.replaceAll('x', ':')} -c:v libx264 -pix_fmt yuv420p $outputPath";
 
-      final bool result = await _channel.invokeMethod('createVideo', {
-        'framePaths': framePaths,
-        'outputPath': outputPath,
-        'width': width,
-        'height': height,
-        'fps': fps,
-      });
+    final session = await FFmpegKit.execute(command);
+    final returnCode = await session.getReturnCode();
 
-      return result;
-    } on PlatformException catch (e) {
-      debugPrint('Erreur Platform: ${e.message}');
-      return false;
-    } catch (e) {
-      debugPrint('Erreur: $e');
-      return false;
-    }
+    return ReturnCode.isSuccess(returnCode);
   }
 }

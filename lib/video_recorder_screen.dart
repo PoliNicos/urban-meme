@@ -94,8 +94,9 @@ class _VideoRecorderScreenState extends State<VideoRecorderScreen> {
     if (_capturedFrames.isEmpty) return;
 
     try {
-      final String outputPath = '/storage/emulated/0/DCIM/video_${DateTime.now().millisecondsSinceEpoch}.mp4';
-      
+      final Directory tempDir = await getTemporaryDirectory();
+      final String outputPath = '${tempDir.path}/video_test.mp4';
+
       final encoder = VideoEncoder();
       final success = await encoder.createVideoFromFrames(
         framePaths: _capturedFrames,

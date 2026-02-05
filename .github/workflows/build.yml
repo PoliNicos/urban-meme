@@ -2,9 +2,9 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, v2-surface-encoder ] # Ajoute ta branche ici
   pull_request:
-    branches: [ main, master ]
+    branches: [ main, master, v2-surface-encoder ] # Et ici aussi
   workflow_dispatch:
 
 jobs:
